@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, MapPin, CreditCard, IndianRupee, Building2 } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
+import { Equipment, Rental } from '../types';
+import { createRental } from '../services/rentalService';
 
 interface RentalFormData {
   startDate: string;
@@ -13,12 +14,10 @@ interface RentalFormData {
   offlineMethod?: 'cash' | 'bank_transfer';
 }
 
-const stripePromise = loadStripe('your_publishable_key'); // Replace with your Stripe publishable key
-
 export default function RentNow() {
   const location = useLocation();
   const navigate = useNavigate();
-  const equipment = location.state?.equipment;
+  const equipment = location.state?.equipment as Equipment;
 
   const [formData, setFormData] = useState<RentalFormData>({
     startDate: '',
@@ -48,7 +47,7 @@ export default function RentNow() {
     );
   }
 
-  const calculateTotalCost = () => {
+  const calculateTotalCost = (): number => {
     if (!formData.startDate || !formData.endDate) return 0;
     const start = new Date(formData.startDate);
     const end = new Date(formData.endDate);
@@ -58,26 +57,67 @@ export default function RentNow() {
 
   const handleOnlinePayment = async () => {
     try {
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error('Stripe failed to load');
-
-      // Here you would typically make an API call to your backend to create a payment intent
-      // For demo purposes, we'll simulate the success
-      const orderId = Math.random().toString(36).substring(2, 15);
+      // In a real application, this would interact with a payment processor
+      // For demo purposes, we'll create the rental and mark it as pending payment
+      const totalAmount = calculateTotalCost();
       
-      navigate('/track', { 
-        state: { 
-          orderId,
-          message: 'Payment successful! Your rental request has been confirmed.' 
-        }
-      });
+      const rentalData: Omit<Rental, 'id' | 'createdAt'> = {
+        equipmentId: equipment.id,
+        customerName: formData.contactName,
+        customerPhone: formData.contactPhone,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        deliveryAddress: formData.deliveryAddress,
+        paymentMethod: 'online',
+        paymentStatus: 'pending',
+        totalAmount,
+        status: 'pending',
+      };
+      
+      const rental = await createRental(rentalData);
+      
+      if (rental) {
+        navigate('/track', { 
+          state: { 
+            orderId: rental.id,
+            message: 'Your rental request has been submitted! Please complete the payment to confirm your order.' 
+          }
+        });
+      } else {
+        throw new Error('Failed to create rental');
+      }
     } catch (error) {
-      console.error('Payment failed:', error);
+      console.error('Payment process failed:', error);
     }
   };
 
-  const handleOfflinePayment = () => {
-    setShowOfflineInstructions(true);
+  const handleOfflinePayment = async () => {
+    try {
+      const totalAmount = calculateTotalCost();
+      
+      const rentalData: Omit<Rental, 'id' | 'createdAt'> = {
+        equipmentId: equipment.id,
+        customerName: formData.contactName,
+        customerPhone: formData.contactPhone,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        deliveryAddress: formData.deliveryAddress,
+        paymentMethod: 'offline',
+        paymentStatus: 'pending',
+        totalAmount,
+        status: 'pending',
+      };
+      
+      const rental = await createRental(rentalData);
+      
+      if (rental) {
+        setShowOfflineInstructions(true);
+      } else {
+        throw new Error('Failed to create rental');
+      }
+    } catch (error) {
+      console.error('Offline payment process failed:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,13 +128,23 @@ export default function RentNow() {
       if (formData.paymentMethod === 'online') {
         await handleOnlinePayment();
       } else {
-        handleOfflinePayment();
+        await handleOfflinePayment();
       }
     } catch (error) {
       console.error('Error processing request:', error);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const confirmOfflineOrder = async () => {
+    setShowOfflineInstructions(false);
+    navigate('/track', {
+      state: {
+        orderId: Math.random().toString(36).substring(2, 15), // In real app, this would be the actual order ID
+        message: 'Your rental request has been submitted! Our team will contact you for payment confirmation.'
+      }
+    });
   };
 
   return (
@@ -222,10 +272,10 @@ export default function RentNow() {
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, paymentMethod: 'online' })}
-                    className={`p-4 border rounded-lg flex items-center gap-3 ${
+                    className={`p-4 border rounded-lg flex items-center gap-3 transition-colors ${
                       formData.paymentMethod === 'online'
                         ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-300'
+                        : 'border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <CreditCard className="h-6 w-6 text-orange-600" />
@@ -238,10 +288,10 @@ export default function RentNow() {
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, paymentMethod: 'offline' })}
-                    className={`p-4 border rounded-lg flex items-center gap-3 ${
+                    className={`p-4 border rounded-lg flex items-center gap-3 transition-colors ${
                       formData.paymentMethod === 'offline'
                         ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-300'
+                        : 'border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <Building2 className="h-6 w-6 text-orange-600" />
@@ -261,10 +311,10 @@ export default function RentNow() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, offlineMethod: 'cash' })}
-                      className={`p-3 border rounded-lg text-left ${
+                      className={`p-3 border rounded-lg text-left transition-colors ${
                         formData.offlineMethod === 'cash'
                           ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-300'
+                          : 'border-gray-300 hover:bg-gray-50'
                       }`}
                     >
                       Cash Payment
@@ -272,10 +322,10 @@ export default function RentNow() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, offlineMethod: 'bank_transfer' })}
-                      className={`p-3 border rounded-lg text-left ${
+                      className={`p-3 border rounded-lg text-left transition-colors ${
                         formData.offlineMethod === 'bank_transfer'
                           ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-300'
+                          : 'border-gray-300 hover:bg-gray-50'
                       }`}
                     >
                       Bank Transfer
@@ -316,7 +366,7 @@ export default function RentNow() {
 
               {/* Offline Payment Instructions Modal */}
               {showOfflineInstructions && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                   <div className="bg-white rounded-lg p-6 max-w-md w-full">
                     <h3 className="text-xl font-bold mb-4">Payment Instructions</h3>
                     {formData.offlineMethod === 'cash' ? (
@@ -330,7 +380,7 @@ export default function RentNow() {
                         <p>Please transfer the amount to our bank account:</p>
                         <div className="bg-gray-50 p-4 rounded">
                           <p>Bank: HDFC Bank</p>
-                          <p>Account Name: BuildRent Construction</p>
+                          <p>Account Name: LAXMI INFRA</p>
                           <p>Account Number: XXXX XXXX XXXX 1234</p>
                           <p>IFSC Code: HDFC0001234</p>
                         </div>
@@ -350,16 +400,7 @@ export default function RentNow() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setShowOfflineInstructions(false);
-                          const orderId = Math.random().toString(36).substring(2, 15);
-                          navigate('/track', {
-                            state: {
-                              orderId,
-                              message: 'Your rental request has been submitted! Our team will contact you for payment confirmation.'
-                            }
-                          });
-                        }}
+                        onClick={confirmOfflineOrder}
                         className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
                       >
                         Confirm Order
@@ -371,7 +412,7 @@ export default function RentNow() {
 
               <button
                 type="submit"
-                disabled={isSubmitting || !formData.offlineMethod}
+                disabled={isSubmitting || (formData.paymentMethod === 'offline' && !formData.offlineMethod)}
                 className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg hover:bg-orange-700 transition duration-300 disabled:opacity-50"
               >
                 {isSubmitting ? 'Processing...' : formData.paymentMethod === 'online' ? 'Pay Now' : 'Continue to Payment'}
