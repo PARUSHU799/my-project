@@ -7,7 +7,7 @@ CREATE TABLE equipment (
   name TEXT NOT NULL,
   category TEXT NOT NULL,
   description TEXT,
-  price_per_day INTEGER NOT NULL,
+  price_per_day INTEGER NOT NULL, 
   image_url TEXT,
   available BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

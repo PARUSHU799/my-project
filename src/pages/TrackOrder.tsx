@@ -150,6 +150,12 @@ export default function TrackOrder() {
                   </div>
                 </div>
               </div>
+               <div>
+                <h3 className="text-sm font-medium text-gray-500">Equipment</h3>
+                <p className="text-lg text-gray-900">{orderStatus.equipmentName || 'Excavator'}</p>
+              </div>
+              
+            
               
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Delivery Address</h3>
@@ -162,7 +168,7 @@ export default function TrackOrder() {
               <div className="pt-4 border-t border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">Total Amount</h3>
                 <p className="text-xl font-bold text-orange-600">
-                  ₹{orderStatus.totalAmount?.toLocaleString('en-IN') || '75,000'}
+                  ₹{orderStatus.totalAmount?.toLocaleString('en-IN') || ''}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
                   Payment Status: <span className={`font-medium ${

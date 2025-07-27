@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Rental } from '../types';
+import { getEquipmentById } from './equipmentService';
 
 // Convert from Supabase format to our app format
 const mapRental = (item: any): Rental => ({
@@ -18,8 +19,21 @@ const mapRental = (item: any): Rental => ({
   createdAt: item.created_at,
 });
 
-export const createRental = async (rental: Omit<Rental, 'id' | 'createdAt'>): Promise<Rental | null> => {
+const calculateTotalAmount = (startDate: string, endDate: string, pricePerDay: number): number => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return days * pricePerDay;
+};
+
+export const createRental = async (rental: Omit<Rental, 'id' | 'createdAt' | 'totalAmount'>): Promise<Rental | null> => {
   try {
+    // Get equipment details to calculate total amount
+    const equipment = await getEquipmentById(rental.equipmentId);
+    if (!equipment) throw new Error('Equipment not found');
+
+    const totalAmount = calculateTotalAmount(rental.startDate, rental.endDate, equipment.pricePerDay);
+
     // Convert to database format
     const rentalData = {
       equipment_id: rental.equipmentId,
@@ -31,7 +45,7 @@ export const createRental = async (rental: Omit<Rental, 'id' | 'createdAt'>): Pr
       delivery_address: rental.deliveryAddress,
       payment_method: rental.paymentMethod,
       payment_status: rental.paymentStatus,
-      total_amount: rental.totalAmount,
+      total_amount: totalAmount,
       status: rental.status,
     };
 
@@ -47,11 +61,16 @@ export const createRental = async (rental: Omit<Rental, 'id' | 'createdAt'>): Pr
   } catch (error) {
     console.error('Error creating rental:', error);
     
+    // For mock data, calculate total amount using mock equipment price
+    const mockPricePerDay = 15000; // Default mock price
+    const totalAmount = calculateTotalAmount(rental.startDate, rental.endDate, mockPricePerDay);
+    
     // Generate a mock id for fallback
     const mockId = Math.random().toString(36).substring(2, 15);
     return {
       ...rental,
       id: mockId,
+      totalAmount,
       createdAt: new Date().toISOString(),
     };
   }
@@ -66,7 +85,8 @@ export const getRentalById = async (id: string): Promise<Rental | null> => {
         equipment:equipment_id (
           name,
           category,
-          image_url
+          image_url,
+          price_per_day
         )
       `)
       .eq('id', id)
@@ -83,20 +103,29 @@ export const getRentalById = async (id: string): Promise<Rental | null> => {
   } catch (error) {
     console.error(`Error fetching rental with id ${id}:`, error);
     
-    // Return mock data for demo
+    // Return mock data for demo with calculated total amount
+    const mockStartDate = '2025-05-01';
+    const mockEndDate = '2025-05-05';
+    const mockPricePerDay = 15000;
+    const totalAmount = calculateTotalAmount(mockStartDate, mockEndDate, mockPricePerDay);
+    
     return {
       id,
       equipmentId: '1',
       customerName: 'Demo Customer',
       customerPhone: '9999999999',
-      startDate: '2024-05-01',
-      endDate: '2024-05-05',
+      customerEmail: 'demo@example.com',
+      startDate: mockStartDate,
+      endDate: mockEndDate,
       deliveryAddress: '123 Construction Site, Mumbai, Maharashtra',
       paymentMethod: 'online',
       paymentStatus: 'paid',
-      totalAmount: 75000,
+      totalAmount,
       status: 'in_transit',
+      createdAt: new Date().toISOString(),
     };
+    
+    
   }
 };
 
